@@ -78,7 +78,7 @@ function loadPublicCourses(){
     data.courses=payload.courses.filter(c=>c&&c.name).map(sheetCourseToDashboard);
     data.tags=[...new Set(data.courses.flatMap(c=>c.tags))];
     if(Array.isArray(payload.weeklyStats)){
-      weekly=payload.weeklyStats.filter(w=>w&&/^\\d{4}-\\d{2}-\\d{2}$/.test(String(w.week_start||''))).map(w=>({
+      weekly=payload.weeklyStats.filter(w=>w&&/^\d{4}-\d{2}-\d{2}$/.test(String(w.week_start||''))).map(w=>({
         week:String(w.week_start),
         reviewed:Number(w.variations_reviewed)||0,
         learned:Number(w.variations_learned)||0,
