@@ -1,6 +1,6 @@
 /* Public Chess.com data; no credentials or account changes. */
 (() => {
-  const USER = 'based_pawn', KEY = 'chesscom_based_pawn_v1';
+  const USER = 'base_d_pawn', KEY = 'chesscom_base_d_pawn_v1';
   const API = 'https://api.chess.com/pub/player/' + USER;
   let snapshot = null, busy = false, message = '', mode = 'rapid', days = 90;
   try { const v = JSON.parse(localStorage.getItem(KEY)); if (v && Array.isArray(v.games) && v.stats) snapshot = v; } catch (_) {}
@@ -33,7 +33,7 @@
       if (!Array.isArray(archives.archives)) throw Error('Invalid game archive response.');
       // Twelve calendar months; requests are serial to respect API rate limits.
       const now = new Date(), cutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11, 1));
-      const urls = archives.archives.filter(u => /^https:\/\/api\.chess\.com\/pub\/player\/based_pawn\/games\/\d{4}\/\d{2}$/.test(u) && new Date(u.slice(-7).replace('/', '-') + '-01T00:00:00Z') >= cutoff).sort();
+      const urls = archives.archives.filter(u => /^https:\/\/api\.chess\.com\/pub\/player\/base_d_pawn\/games\/\d{4}\/\d{2}$/.test(u) && new Date(u.slice(-7).replace('/', '-') + '-01T00:00:00Z') >= cutoff).sort();
       const games = new Map();
       for (let i = 0; i < urls.length; i++) {
         message = `Loading game history ${i + 1} of ${urls.length}…`; redraw();
@@ -63,7 +63,7 @@
     const breakdown = color => { const a = games.filter(g => g.color === color); return [html(color === 'white' ? 'White' : 'Black'), a.length, a.filter(g => g.result === 'Win').length, a.filter(g => g.result === 'Draw').length, a.filter(g => g.result === 'Loss').length, a.length ? (100*a.filter(g => g.result === 'Win').length/a.length).toFixed(1)+'%' : '—']; };
     const openings = new Map();
     for (const g of games) { const key = g.color + ':' + g.opening; const o = openings.get(key) || {name:g.opening,color:g.color,n:0,w:0,d:0,l:0}; o.n++; o.w += g.result === 'Win'; o.d += g.result === 'Draw'; o.l += g.result === 'Loss'; openings.set(key,o); }
-    el.innerHTML = `<div class="heading"><div><div class="eyebrow">Playing & progress</div><h1>Chess.com</h1><div class="muted">based_pawn · Standard chess</div></div><div class="tools"><button id="ccRefresh" ${busy?'disabled':''}>${busy?'Updating…':'Refresh'}</button><a class="btn" href="https://www.chess.com/member/based_pawn" target="_blank" rel="noopener noreferrer">Open profile ↗</a></div></div>
+    el.innerHTML = `<div class="heading"><div><div class="eyebrow">Playing & progress</div><h1>Chess.com</h1><div class="muted">base_d_pawn · Standard chess</div></div><div class="tools"><button id="ccRefresh" ${busy?'disabled':''}>${busy?'Updating…':'Refresh'}</button><a class="btn" href="https://www.chess.com/member/base_d_pawn" target="_blank" rel="noopener noreferrer">Open profile ↗</a></div></div>
       <p class="tiny" role="status">${html(message || (snapshot ? 'Last synchronized: '+new Date(snapshot.fetched).toLocaleString() : 'Ready to connect.'))}</p>
       <div class="stats">${['rapid','blitz','bullet','daily'].map(m => {const s=snapshot?.stats['chess_'+m];return card(m[0].toUpperCase()+m.slice(1),s?.last?.rating ?? '—',s?.best?.rating ? 'Best: '+s.best.rating : 'No rating available');}).join('')}</div>
       <section class="panel"><div class="tools"><label for="ccMode">Time category</label><select id="ccMode">${['rapid','blitz','bullet','daily'].map(m=>`<option value="${m}" ${m===mode?'selected':''}>${m[0].toUpperCase()+m.slice(1)}</option>`).join('')}</select><label for="ccPeriod">Period</label><select id="ccPeriod">${[[30,'Last 30 days'],[90,'Last 90 days'],[0,'Loaded history']].map(([v,n])=>`<option value="${v}" ${v===days?'selected':''}>${n}</option>`).join('')}</select></div><p class="tiny">History covers the current month and previous 11 months. Results include rated and unrated games; the rating chart uses rated games only.</p></section>
