@@ -1,6 +1,6 @@
 /* Public Chess.com data; no credentials or account changes. */
 (() => {
-  const USER = 'base_d_pawn', KEY = 'chesscom_base_d_pawn_v1';
+  const USER = 'base_d_pawn', KEY = 'chesscom_base_d_pawn_all_v2';
   const API = 'https://api.chess.com/pub/player/' + USER;
   let snapshot = null, busy = false, message = '', mode = 'daily', days = 90;
   try { const v = JSON.parse(localStorage.getItem(KEY)); if (v && Array.isArray(v.games) && v.stats) snapshot = v; } catch (_) {}
@@ -31,9 +31,8 @@
       if (!stats || !Object.keys(stats).some(k => k.startsWith('chess_'))) throw Error('No rating data returned.');
       const archives = await get(API + '/games/archives');
       if (!Array.isArray(archives.archives)) throw Error('Invalid game archive response.');
-      // Twelve calendar months; requests are serial to respect API rate limits.
-      const now = new Date(), cutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11, 1));
-      const urls = archives.archives.filter(u => /^https:\/\/api\.chess\.com\/pub\/player\/base_d_pawn\/games\/\d{4}\/\d{2}$/.test(u) && new Date(u.slice(-7).replace('/', '-') + '-01T00:00:00Z') >= cutoff).sort();
+      // Load every archive; requests are serial to respect API rate limits.
+      const urls = archives.archives.filter(u => /^https:\/\/api\.chess\.com\/pub\/player\/base_d_pawn\/games\/\d{4}\/\d{2}$/.test(u)).sort();
       const games = new Map();
       for (let i = 0; i < urls.length; i++) {
         message = `Loading game history ${i + 1} of ${urls.length}…`; redraw();
@@ -41,13 +40,13 @@
         if (!Array.isArray(month.games)) throw Error('Invalid monthly archive response.');
         for (const raw of month.games) { const g = normalize(raw); if (g?.id) games.set(g.id, g); }
       }
-      snapshot = {stats, games:[...games.values()].sort((a,b) => a.end-b.end), fetched:Date.now(), since:cutoff.toISOString()};
+      snapshot = {stats, games:[...games.values()].sort((a,b) => a.end-b.end), fetched:Date.now(), allTime:true};
       message = '';
       try { localStorage.setItem(KEY, JSON.stringify(snapshot)); } catch (_) { message = 'Loaded successfully; browser storage is unavailable, so this data cannot be cached.'; }
     } catch (e) { message = `Could not finish updating. ${e.message} ${snapshot ? 'Showing the last complete update.' : 'Use Refresh to try again.'}`; }
     finally { busy = false; redraw(); }
   }
-  function redraw() { if (typeof tab !== 'undefined' && tab === 'Chess.com') window.renderChessCom(document.getElementById('app')); }
+  function redraw() { const home = document.getElementById('chesscomHome'); if (home) window.renderChessComHome(home); if (typeof tab !== 'undefined' && tab === 'Chess.com') window.renderChessCom(document.getElementById('app')); }
   function chart(games) {
     const points = games.filter(g => g.rated && Number.isFinite(g.rating));
     if (points.length < 2) return '<p class="muted">Play at least two rated games in this period to see a trend.</p>';
@@ -66,7 +65,7 @@
     el.innerHTML = `<div class="heading"><div><div class="eyebrow">Playing & progress</div><h1>Chess.com</h1><div class="muted">base_d_pawn · Standard chess</div></div><div class="tools"><button id="ccRefresh" ${busy?'disabled':''}>${busy?'Updating…':'Refresh'}</button><a class="btn" href="https://www.chess.com/member/base_d_pawn" target="_blank" rel="noopener noreferrer">Open profile ↗</a></div></div>
       <p class="tiny" role="status">${html(message || (snapshot ? 'Last synchronized: '+new Date(snapshot.fetched).toLocaleString() : 'Ready to connect.'))}</p>
       <div class="stats">${['rapid','blitz','bullet','daily'].map(m => {const s=snapshot?.stats['chess_'+m];return card(m[0].toUpperCase()+m.slice(1),s?.last?.rating ?? '—',s?.best?.rating ? 'Best: '+s.best.rating : s?.last?.rating != null ? 'Best rating not supplied' : 'No rating available');}).join('')}</div>
-      <section class="panel"><div class="tools"><label for="ccMode">Time category</label><select id="ccMode">${['rapid','blitz','bullet','daily'].map(m=>`<option value="${m}" ${m===mode?'selected':''}>${m[0].toUpperCase()+m.slice(1)}</option>`).join('')}</select><label for="ccPeriod">Period</label><select id="ccPeriod">${[[30,'Last 30 days'],[90,'Last 90 days'],[0,'Loaded history']].map(([v,n])=>`<option value="${v}" ${v===days?'selected':''}>${n}</option>`).join('')}</select></div><p class="tiny">History covers the current month and previous 11 months. Results include rated and unrated games; the rating chart uses rated games only.</p></section>
+      <section class="panel"><div class="tools"><label for="ccMode">Time category</label><select id="ccMode">${['rapid','blitz','bullet','daily'].map(m=>`<option value="${m}" ${m===mode?'selected':''}>${m[0].toUpperCase()+m.slice(1)}</option>`).join('')}</select><label for="ccPeriod">Period</label><select id="ccPeriod">${[[30,'Last 30 days'],[90,'Last 90 days'],[0,'All time']].map(([v,n])=>`<option value="${v}" ${v===days?'selected':''}>${n}</option>`).join('')}</select></div><p class="tiny">History covers all available months. Results include rated and unrated games; the rating chart uses rated games only.</p></section>
       <div class="stats">${card('Games played',games.length)}${card('Wins',wins,games.length?(100*wins/games.length).toFixed(1)+'% win rate':'')}${card('Draws',draws)}${card('Losses',losses)}</div>
       <section class="panel"><h2>Rating history</h2>${chart(games)}</section>
       <section class="panel"><h2>White versus Black</h2>${table(['Colour','Games','Wins','Draws','Losses','Win rate'],[breakdown('white'),breakdown('black')])}</section>
@@ -77,5 +76,20 @@
     document.getElementById('ccMode').onchange = e => {mode=e.target.value;redraw();};
     document.getElementById('ccPeriod').onchange = e => {days=Number(e.target.value);redraw();};
   };
+
+  window.renderChessComHome = function(el) {
+    const games = snapshot?.games.filter(g => g.mode === 'daily') || [];
+    const wins = games.filter(g => g.result === 'Win').length;
+    const ready = !!snapshot;
+    el.innerHTML = '<h2>Chess.com · Daily</h2><div class="stats">' +
+      card('Daily rating', snapshot?.stats.chess_daily?.last?.rating ?? '—', 'Current rating') +
+      card('Games played', ready ? games.length.toLocaleString() : '—', 'All time') +
+      card('Wins', ready ? wins.toLocaleString() : '—', 'All time') +
+      card('Win rate', ready && games.length ? (100*wins/games.length).toFixed(1)+'%' : '—', 'All time · wins ÷ games') +
+      '</div><p class="tiny" role="status">' + html(message || (ready ? 'All available Daily games · rated and unrated · Updated '+new Date(snapshot.fetched).toLocaleString() : 'Loading Chess.com…')) +
+      '</p><div class="tools" style="margin-bottom:25px"><button id="ccHomeRefresh" '+(busy?'disabled':'')+'>'+(busy?'Updating…':'Refresh Chess.com')+'</button></div>';
+    document.getElementById('ccHomeRefresh').onclick = sync;
+  };
+
   window.ensureChessCom = () => { if (!busy && (!snapshot || Date.now()-snapshot.fetched>86400000) && !message) sync(); };
 })();
