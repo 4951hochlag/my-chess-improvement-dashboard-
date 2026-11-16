@@ -2,7 +2,7 @@
 (() => {
   const USER = 'base_d_pawn', KEY = 'chesscom_base_d_pawn_v1';
   const API = 'https://api.chess.com/pub/player/' + USER;
-  let snapshot = null, busy = false, message = '', mode = 'rapid', days = 90;
+  let snapshot = null, busy = false, message = '', mode = 'daily', days = 90;
   try { const v = JSON.parse(localStorage.getItem(KEY)); if (v && Array.isArray(v.games) && v.stats) snapshot = v; } catch (_) {}
   const html = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const date = t => new Date(t * 1000).toLocaleDateString();
