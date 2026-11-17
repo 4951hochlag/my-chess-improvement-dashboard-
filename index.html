@@ -185,6 +185,7 @@ function initGoogleLogin(){
         if(!r.ok)throw Error('This account cannot access the private Courses sheet (HTTP '+r.status+').');
         ownerToken=response.access_token;
         showOwnerMode(true);
+        await loadInspirationSheet();
       }catch(err){ownerToken=null;showOwnerMode(false);alert('Owner access was not granted: '+err.message);}
     }
   });
@@ -193,7 +194,7 @@ function initGoogleLogin(){
 document.getElementById('googleLogin').onclick=()=>{if(initGoogleLogin())tokenClient.requestAccessToken({prompt:'consent'});};
 document.getElementById('googleLogout').onclick=()=>{
   if(ownerToken&&window.google?.accounts?.oauth2)google.accounts.oauth2.revoke(ownerToken,()=>{});
-  ownerToken=null;showOwnerMode(false);loadPublicCourses();
+  ownerToken=null;inspirationSheetLoaded=false;showOwnerMode(false);loadPublicCourses();
 };
 async function persistCourse(c){
   if(!ownerToken)throw Error('Sign in first.');
@@ -217,19 +218,49 @@ loadPublicCourses();
 </script><script>
 const INSPIRATION_QUOTES=[["Chess is life in miniature. Chess is a struggle, chess battles.","Garry Kasparov","Philosophy"],["Chess is everything: art, science and sport.","Anatoly Karpov","Philosophy"],["The blunders are all there on the board, waiting to be made.","Savielly Tartakower","Humour"],["When you see a good move, look for a better one.","Emanuel Lasker","Improvement"],["Chess is the gymnasium of the mind.","Blaise Pascal (attributed)","Philosophy"],["The threat is stronger than the execution.","Aron Nimzowitsch","Strategy"],["Pawns are the soul of chess.","François-André Danican Philidor","Strategy"],["Chess is a sea in which a gnat may drink and an elephant may bathe.","Indian proverb","Philosophy"],["Chess is a war over the board. The object is to crush the opponent's mind.","Bobby Fischer","Competition"],["I don't believe in psychology. I believe in good moves.","Bobby Fischer","Improvement"],["The hardest game to win is a won game.","Emanuel Lasker (attributed)","Improvement"],["In chess, as in life, opportunity strikes but once.","David Bronstein (attributed)","Philosophy"],["Chess demands total concentration.","Bobby Fischer","Improvement"],["Chess is the art of analysis.","Mikhail Botvinnik (attributed)","Calculation"],["You must take your opponent into a deep dark forest where 2+2=5.","Mikhail Tal","Creativity"],["There are two types of sacrifices: correct ones and mine.","Mikhail Tal","Humour"],["Help your pieces so they can help you.","Paul Morphy (attributed)","Strategy"],["Chess is a struggle against error.","Johannes Zukertort (attributed)","Improvement"],["The winner of the game is the player who makes the next-to-last mistake.","Savielly Tartakower","Humour"],["A good chess player is always lucky.","José Raúl Capablanca (attributed)","Philosophy"]];
 const INSPIRATION_KEY='myChessInspiration_v1';
-let inspirationRandom=null,inspirationSearch='',inspirationTheme='All',inspirationOnlyFavorites=false;
+let inspirationSheetLoaded=false,inspirationRandom=null,inspirationSearch='',inspirationTheme='All',inspirationOnlyFavorites=false;
 function inspirationState(){try{const s=JSON.parse(localStorage.getItem(INSPIRATION_KEY)||'{}');return {custom:Array.isArray(s.custom)?s.custom:[],favorites:Array.isArray(s.favorites)?s.favorites:[]}}catch(e){return {custom:[],favorites:[]}}}
 function inspirationSave(s){localStorage.setItem(INSPIRATION_KEY,JSON.stringify(s))}
-function inspirationAll(){return [...INSPIRATION_QUOTES,...inspirationState().custom]}
+function inspirationAll(){return inspirationSheetLoaded?[...INSPIRATION_QUOTES]:[...INSPIRATION_QUOTES,...inspirationState().custom]}
 function inspirationWeekIndex(){const d=new Date(),start=new Date(d.getFullYear(),0,1),day=Math.floor((d-start)/86400000);return Math.floor(day/7)%INSPIRATION_QUOTES.length}
+
+async function loadInspirationSheet(){
+ if(!ownerToken)return;
+ const r=await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+SPREADSHEET_ID+'/values/Inspiration!A2:E1000',{headers:{Authorization:'Bearer '+ownerToken}});
+ if(!r.ok)throw Error('Could not load Inspiration sheet (HTTP '+r.status+')');
+ const j=await r.json();const rows=(j.values||[]).filter(r=>r[1]);
+ INSPIRATION_QUOTES.splice(0,INSPIRATION_QUOTES.length,...rows.map(r=>[r[1]||'',r[2]||'',r[3]||'Philosophy']));
+ inspirationSheetLoaded=true;
+ const s=inspirationState();s.favorites=rows.flatMap((r,i)=>String(r[4]||'').toLowerCase()==='true'?[i]:[]);inspirationSave(s);
+ if(tab==='Inspiration')render();
+}
+async function inspirationWrite(range,values){
+ if(!ownerToken)throw Error('Sign in with Google first.');
+ const r=await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+SPREADSHEET_ID+'/values/'+encodeURIComponent(range)+'?valueInputOption=RAW',{method:'PUT',headers:{Authorization:'Bearer '+ownerToken,'Content-Type':'application/json'},body:JSON.stringify({values})});
+ if(!r.ok)throw Error('Google Sheets returned HTTP '+r.status);
+}
+async function addInspirationQuote(q){
+ if(!inspirationSheetLoaded)await loadInspirationSheet();
+ const row=INSPIRATION_QUOTES.length+2;
+ await inspirationWrite('Inspiration!A'+row+':E'+row,[[String(row-1),...q,'FALSE']]);
+ INSPIRATION_QUOTES.push(q);renderInspiration(document.getElementById('app'));
+}
+async function inspirationToggleFavorite(i){
+ if(!ownerToken){alert('Sign in with Google to sync favourites.');return}
+ if(!inspirationSheetLoaded)await loadInspirationSheet();
+ const s=inspirationState(),next=!s.favorites.includes(i);
+ await inspirationWrite('Inspiration!E'+(i+2),[[next?'TRUE':'FALSE']]);
+ s.favorites=next?[...s.favorites,i]:s.favorites.filter(n=>n!==i);
+ inspirationSave(s);renderInspiration(document.getElementById('app'));
+}
 function inspirationQuote(q,i,featured=false){const fav=inspirationState().favorites.includes(i);return featured?`<div class="quote-mark">“</div><blockquote>“${esc(q[0])}”</blockquote><div class="attribution">— ${esc(q[1])}</div><div class="muted" style="margin-top:8px">${esc(q[2])}</div><div class="tools"><button data-inspire-fav="${i}">${fav?'♥ Saved':'♡ Save favourite'}</button><button id="inspireAnother">Show another quote ↻</button></div>`:`<article class="inspire-item"><p>“${esc(q[0])}”</p><footer>— ${esc(q[1])} · ${esc(q[2])}</footer><div class="tools"><button class="${fav?'saved':''}" data-inspire-fav="${i}">${fav?'♥ Favourite':'♡ Favourite'}</button><button data-inspire-feature="${i}">Feature quote</button></div></article>`}
-function renderInspiration(el){const all=inspirationAll(),chosen=inspirationRandom===null?inspirationWeekIndex():inspirationRandom%all.length;const themes=['All',...new Set(all.map(q=>q[2]))];const fav=inspirationState().favorites;const filtered=all.map((q,i)=>({q,i})).filter(({q,i})=>(inspirationTheme==='All'||q[2]===inspirationTheme)&&(!inspirationOnlyFavorites||fav.includes(i))&&[q[0],q[1],q[2]].join(' ').toLowerCase().includes(inspirationSearch.toLowerCase()));el.innerHTML=`<div class="heading"><div><div class="eyebrow">Wisdom from the board</div><h1>Inspiration</h1><div class="muted">A growing collection of chess wisdom, humour and ideas</div></div><div class="muted">${all.length} quotes · ${fav.length} favourites</div></div><section class="inspire-feature"><div class="eyebrow">${inspirationRandom===null?'Quote of the week':'Selected quote'}</div>${inspirationQuote(all[chosen],chosen,true)}</section><div class="heading"><div><h2>Quote library</h2><div class="muted">Explore, search and save your favourites</div></div></div><div class="tools inspire-controls"><input id="inspireSearch" aria-label="Search quotes" placeholder="Search quotes or authors..." value="${esc(inspirationSearch)}"><select id="inspireTheme" aria-label="Filter theme">${themes.map(t=>`<option value="${esc(t)}" ${t===inspirationTheme?'selected':''}>${esc(t)}</option>`).join('')}</select><button id="inspireFavorites">${inspirationOnlyFavorites?'♥ Favourites only':'♡ All quotes'}</button></div><div class="inspire-grid">${filtered.map(({q,i})=>inspirationQuote(q,i)).join('')||'<div class="panel">No matching quotes yet.</div>'}</div><section class="panel inspire-form"><h2>Add a quote</h2><p class="muted">Personal additions are saved in this browser.</p><div class="inspire-controls"><textarea id="inspireText" placeholder="Quote text"></textarea><div class="tools" style="margin-top:10px"><input id="inspireAuthor" placeholder="Author"><select id="inspireNewTheme">${themes.filter(t=>t!=='All').map(t=>`<option>${esc(t)}</option>`).join('')}</select><button id="inspireAdd">Add quote</button></div></div></section>`;
-el.querySelectorAll('[data-inspire-fav]').forEach(b=>b.onclick=()=>{const i=+b.dataset.inspireFav,s=inspirationState();s.favorites=s.favorites.includes(i)?s.favorites.filter(n=>n!==i):[...s.favorites,i];inspirationSave(s);renderInspiration(el)});
+function renderInspiration(el){const all=inspirationAll(),chosen=inspirationRandom===null?inspirationWeekIndex():inspirationRandom%all.length;const themes=['All',...new Set(all.map(q=>q[2]))];const fav=inspirationState().favorites;const filtered=all.map((q,i)=>({q,i})).filter(({q,i})=>(inspirationTheme==='All'||q[2]===inspirationTheme)&&(!inspirationOnlyFavorites||fav.includes(i))&&[q[0],q[1],q[2]].join(' ').toLowerCase().includes(inspirationSearch.toLowerCase()));el.innerHTML=`<div class="heading"><div><div class="eyebrow">Wisdom from the board</div><h1>Inspiration</h1><div class="muted">A growing collection of chess wisdom, humour and ideas</div></div><div class="muted">${all.length} quotes · ${fav.length} favourites · ${inspirationSheetLoaded?'Google Sheets synced':'Sign in to sync'}</div></div><section class="inspire-feature"><div class="eyebrow">${inspirationRandom===null?'Quote of the week':'Selected quote'}</div>${inspirationQuote(all[chosen],chosen,true)}</section><div class="heading"><div><h2>Quote library</h2><div class="muted">Explore, search and save your favourites</div></div></div><div class="tools inspire-controls"><input id="inspireSearch" aria-label="Search quotes" placeholder="Search quotes or authors..." value="${esc(inspirationSearch)}"><select id="inspireTheme" aria-label="Filter theme">${themes.map(t=>`<option value="${esc(t)}" ${t===inspirationTheme?'selected':''}>${esc(t)}</option>`).join('')}</select><button id="inspireFavorites">${inspirationOnlyFavorites?'♥ Favourites only':'♡ All quotes'}</button></div><div class="inspire-grid">${filtered.map(({q,i})=>inspirationQuote(q,i)).join('')||'<div class="panel">No matching quotes yet.</div>'}</div><section class="panel inspire-form"><h2>Add a quote</h2><p class="muted">Sign in with Google to save new quotes directly to your spreadsheet.</p><div class="inspire-controls"><textarea id="inspireText" placeholder="Quote text"></textarea><div class="tools" style="margin-top:10px"><input id="inspireAuthor" placeholder="Author"><select id="inspireNewTheme">${themes.filter(t=>t!=='All').map(t=>`<option>${esc(t)}</option>`).join('')}</select><button id="inspireAdd">Add quote</button></div></div></section>`;
+el.querySelectorAll('[data-inspire-fav]').forEach(b=>b.onclick=()=>{inspirationToggleFavorite(+b.dataset.inspireFav).catch(err=>alert('Could not save favourite: '+err.message))});
 el.querySelectorAll('[data-inspire-feature]').forEach(b=>b.onclick=()=>{inspirationRandom=+b.dataset.inspireFeature;renderInspiration(el);el.scrollIntoView({behavior:'smooth'})});
 el.querySelector('#inspireAnother').onclick=()=>{inspirationRandom=(chosen+1+Math.floor(Math.random()*(all.length-1)))%all.length;renderInspiration(el)};
 el.querySelector('#inspireSearch').oninput=e=>{const pos=e.target.selectionStart;inspirationSearch=e.target.value;renderInspiration(el);const input=el.querySelector('#inspireSearch');input.focus();input.setSelectionRange(pos,pos)};
 el.querySelector('#inspireTheme').onchange=e=>{inspirationTheme=e.target.value;renderInspiration(el)};
 el.querySelector('#inspireFavorites').onclick=()=>{inspirationOnlyFavorites=!inspirationOnlyFavorites;renderInspiration(el)};
-el.querySelector('#inspireAdd').onclick=()=>{const quote=el.querySelector('#inspireText').value.trim(),author=el.querySelector('#inspireAuthor').value.trim(),theme=el.querySelector('#inspireNewTheme').value;if(!quote||!author){alert('Please enter both a quote and an author.');return}const s=inspirationState();s.custom.push([quote,author,theme]);inspirationSave(s);renderInspiration(el)};
+el.querySelector('#inspireAdd').onclick=()=>{const quote=el.querySelector('#inspireText').value.trim(),author=el.querySelector('#inspireAuthor').value.trim(),theme=el.querySelector('#inspireNewTheme').value;if(!quote||!author){alert('Please enter both a quote and an author.');return}if(!ownerToken){alert('Sign in with Google to save quotes to your spreadsheet.');return}addInspirationQuote([quote,author,theme]).catch(err=>alert('Could not save quote: '+err.message))};
 }
 </script></body></html>
