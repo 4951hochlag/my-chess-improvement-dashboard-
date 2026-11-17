@@ -231,7 +231,7 @@ function inspirationSave(s){localStorage.setItem(INSPIRATION_KEY,JSON.stringify(
 function inspirationAll(){return inspirationSheetLoaded?[...INSPIRATION_QUOTES]:[...INSPIRATION_QUOTES,...inspirationState().custom]}
 function inspirationWeekIndex(){const d=new Date(),start=new Date(d.getFullYear(),0,1),day=Math.floor((d-start)/86400000);return Math.floor(day/7)%INSPIRATION_QUOTES.length}
 
-async function loadInspirationSheet(){
+async async function loadInspirationSheet(){
  if(!ownerToken)return;
  const r=await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+SPREADSHEET_ID+'/values/Inspiration!A2:E1000',{headers:{Authorization:'Bearer '+ownerToken}});
  if(!r.ok)throw Error('Could not load Inspiration sheet (HTTP '+r.status+')');
