@@ -29,6 +29,7 @@
     try {
       const stats = await get(API + '/stats');
       if (!stats || !Object.keys(stats).some(k => k.startsWith('chess_'))) throw Error('No rating data returned.');
+      dailyRating = stats?.chess_daily?.last?.rating ?? dailyRating;
       const archives = await get(API + '/games/archives');
       if (!Array.isArray(archives.archives)) throw Error('Invalid game archive response.');
       // Load every archive; requests are serial to respect API rate limits.
@@ -89,6 +90,21 @@
       '</div><p class="tiny" role="status">' + html(message || (ready ? 'All available Daily games · rated and unrated · Updated '+new Date(snapshot.fetched).toLocaleString() : 'Loading Chess.com…')) +
       '</p><div class="tools" style="margin-bottom:25px"><button id="ccHomeRefresh" '+(busy?'disabled':'')+'>'+(busy?'Updating…':'Refresh Chess.com')+'</button></div>';
     document.getElementById('ccHomeRefresh').onclick = sync;
+  };
+
+  // Goals need only current stats, without waiting for the full game archive.
+  let dailyRating = snapshot?.stats?.chess_daily?.last?.rating ?? null;
+  let ratingRequest = null, ratingChecked = 0, ratingError = '';
+  window.getDailyRating = () => ({value: Number.isFinite(dailyRating) ? dailyRating : null, error: ratingError});
+  window.ensureDailyRating = () => {
+    if (ratingRequest || Date.now() - ratingChecked < 60000) return ratingRequest;
+    ratingRequest = get(API + '/stats').then(stats => {
+      const rating = stats?.chess_daily?.last?.rating;
+      if (!Number.isFinite(rating)) throw Error('Daily rating is unavailable.');
+      dailyRating = rating; ratingError = '';
+    }).catch(() => { ratingError = 'Could not refresh your Daily rating. Reload to try again.'; })
+      .finally(() => { ratingChecked = Date.now(); ratingRequest = null; if (typeof tab !== 'undefined' && tab === 'Goals') render(); });
+    return ratingRequest;
   };
 
   window.ensureChessCom = () => { if (!busy && (!snapshot || Date.now()-snapshot.fetched>86400000) && !message) sync(); };
