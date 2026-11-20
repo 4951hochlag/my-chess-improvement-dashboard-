@@ -126,17 +126,56 @@ const vizPositions=[
  {fen:'4k3/8/2KB4/8/8/8/8/5R2 w - - 0 1',name:'Mate in one 17'},
  {fen:'4k3/8/3PP3/8/8/8/8/R5K1 w - - 0 1',name:'Mate in one 18'},
  {fen:'4k3/R3P3/8/8/4N3/8/8/6K1 w - - 0 1',name:'Mate in one 19'},
- {fen:'4k3/R3P3/8/5B2/8/8/8/6K1 w - - 0 1',name:'Mate in one 20'},
- {fen:'6k1/5ppp/5n2/8/8/8/1B3PPP/4R1K1 w - - 0 1',name:'Pieces and diagonals'},
- {fen:'r3k2r/ppp2ppp/2n5/3p4/3P4/2N5/PPP2PPP/R3K2R w KQkq - 0 1',name:'Full-board reconstruction'}
+ {fen:'4k3/R3P3/8/5B2/8/8/8/6K1 w - - 0 1',name:'Mate in one 20'}
 ];
 let vizIndex=0,vizHidden=false,vizCoords=true,vizOrientation='white',vizCustom='';
 function vizBoard(fen){const rows=fen.split(' ')[0].split('/');if(rows.length!==8)return null;const b=[];for(const row of rows){let a=[];for(const c of row){if(/[1-8]/.test(c))for(let i=0;i<+c;i++)a.push('');else if(/[prnbqkPRNBQK]/.test(c))a.push(c);else return null}if(a.length!==8)return null;b.push(a)}return b}
+
+function downloadVisualizationPDF(){
+ const prompt=[
+ 'CHATGPT VOICE PRACTICE PROMPT',
+ 'You are my chess visualization coach. Use the numbered FEN positions below.',
+ 'Work with me orally, one position at a time, beginning with position 1 unless',
+ 'I ask for a different number. Do not show or reveal a chessboard or solution.',
+ 'Tell me the side to move and read each piece and its square slowly.',
+ 'Give me time to reconstruct the position in my mind.',
+ 'Ask me to name the pieces and their squares, then describe the king escape',
+ 'squares, attacked squares, and mating net. Ask me to find mate in one.',
+ 'Do not reveal the mating move until I explicitly request the answer.',
+ 'If I make a mistake, give a small hint rather than the solution.',
+ 'Do not tell me the colours of squares; I practise those independently.',
+ 'After my answer, verify the move and explain the mating net concisely.',
+ 'Proceed to the next position only when I say I am ready.'
+ ];
+ const lines=['MY CHESS IMPROVEMENT DASHBOARD','Visualization - Mate in One FEN Library','Generated from the current website position list.','',...prompt,'','POSITIONS',...vizPositions.flatMap((p,i)=>[(i+1)+'. '+p.name,p.fen,''])];
+ // Self-contained PDF writer; it reads vizPositions on every click, so additions
+ // to the site automatically appear in the next downloaded document.
+ const pages=[];for(let i=0;i<lines.length;i+=49)pages.push(lines.slice(i,i+49));
+ const objs=[];const add=s=>{objs.push(s);return objs.length};
+ const catalog=add('');const root=add('');const font=add('<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>');
+ const refs=[];
+ for(const page of pages){
+   const escapePDF=s=>s.replace(/[^\x20-\x7e]/g,'-').replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)');
+   const stream='BT /F1 9 Tf 42 755 Td 13 TL '+page.map((s,i)=>(i?'T* ':'')+'('+escapePDF(s)+') Tj').join('\n')+' ET';
+   const content=add('<< /Length '+new TextEncoder().encode(stream).length+' >>\nstream\n'+stream+'\nendstream');
+   refs.push(add('<< /Type /Page /Parent '+root+' 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 '+font+' 0 R >> >> /Contents '+content+' 0 R >>'));
+ }
+ objs[catalog-1]='<< /Type /Catalog /Pages '+root+' 0 R >>';
+ objs[root-1]='<< /Type /Pages /Count '+refs.length+' /Kids ['+refs.map(n=>n+' 0 R').join(' ')+'] >>';
+ let pdf='%PDF-1.4\n';const offsets=[0];
+ for(let i=0;i<objs.length;i++){offsets.push(new TextEncoder().encode(pdf).length);pdf+=(i+1)+' 0 obj\n'+objs[i]+'\nendobj\n'}
+ const xref=new TextEncoder().encode(pdf).length;
+ pdf+='xref\n0 '+(objs.length+1)+'\n0000000000 65535 f \n'+offsets.slice(1).map(n=>String(n).padStart(10,'0')+' 00000 n \n').join('')+'trailer\n<< /Size '+(objs.length+1)+' /Root '+catalog+' 0 R >>\nstartxref\n'+xref+'\n%%EOF';
+ const blob=new Blob([pdf],{type:'application/pdf'}),url=URL.createObjectURL(blob);
+ const a=document.createElement('a');a.href=url;a.download='chess-visualization-fens-and-voice-prompt.pdf';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+}
+
 function renderVisualization(el){
  const p=vizPositions[vizIndex],fen=vizCustom||p.fen,board=vizBoard(fen);
  const glyph={K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙',k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
  const ranks=vizOrientation==='white'?[0,1,2,3,4,5,6,7]:[7,6,5,4,3,2,1],files=vizOrientation==='white'?[0,1,2,3,4,5,6,7]:[7,6,5,4,3,2,1];
- el.innerHTML='<div class="heading"><div><div class="eyebrow">Train your mental board</div><h1>Visualization</h1><p class="muted">Study a position, hide the pieces, and reconstruct it from memory.</p></div></div><div class="panel"><div class="tools"><select id="vizPreset" aria-label="Training position">'+vizPositions.map((x,i)=>'<option value="'+i+'" '+(vizIndex===i?'selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select><button id="vizHide">'+(vizHidden?'Reveal pieces':'Hide pieces')+'</button><button id="vizFlip">Flip board</button><button id="vizCoords">'+(vizCoords?'Hide coordinates':'Show coordinates')+'</button></div><div class="viz-layout"><div class="viz-board" role="img" aria-label="Chess position'+(vizHidden?' with pieces hidden':'')+'">'+(board?ranks.map(r=>files.map(c=>'<div class="viz-square '+((r+c)%2?'viz-dark':'viz-light')+'">'+(!vizHidden&&board[r][c]?'<span class="viz-piece '+(board[r][c]===board[r][c].toUpperCase()?'viz-white':'viz-black')+'">'+glyph[board[r][c]]+'</span>':'')+(vizCoords&&c===files[0]?'<small class="viz-rank">'+(8-r)+'</small>':'')+(vizCoords&&r===ranks[7]?'<small class="viz-file">'+'abcdefgh'[c]+'</small>':'')+'</div>').join('')).join(''):'<p>Invalid FEN</p>')+'</div><div class="viz-sidebar"><h2>Position practice</h2><p>1. Memorize the locations of the pieces.</p><p>2. Hide the pieces and describe their squares aloud.</p><p>3. Reveal the board to check your reconstruction.</p><label for="vizFen">FEN position</label><textarea id="vizFen" spellcheck="false" rows="3">'+esc(fen)+'</textarea><div class="tools"><button id="vizLoad">Load FEN</button><button id="vizReset">Reset position</button></div><p id="vizError" class="muted" role="status"></p></div></div></div>';
+ el.innerHTML='<div class="heading"><div><div class="eyebrow">Train your mental board</div><h1>Visualization</h1><p class="muted">Study a position, hide the pieces, and reconstruct it from memory.</p></div></div><div class="panel"><div class="tools"><select id="vizPreset" aria-label="Training position">'+vizPositions.map((x,i)=>'<option value="'+i+'" '+(vizIndex===i?'selected':'')+'>'+esc(x.name)+'</option>').join('')+'</select><button id="vizHide">'+(vizHidden?'Reveal pieces':'Hide pieces')+'</button><button id="vizFlip">Flip board</button><button id="vizCoords">'+(vizCoords?'Hide coordinates':'Show coordinates')+'</button></div><div class="tools" style="margin-top:14px"><button id="vizDownloadPDF" type="button">Download FEN list + ChatGPT Voice prompt (PDF)</button></div><div class="viz-layout"><div class="viz-board" role="img" aria-label="Chess position'+(vizHidden?' with pieces hidden':'')+'">'+(board?ranks.map(r=>files.map(c=>'<div class="viz-square '+((r+c)%2?'viz-dark':'viz-light')+'">'+(!vizHidden&&board[r][c]?'<span class="viz-piece '+(board[r][c]===board[r][c].toUpperCase()?'viz-white':'viz-black')+'">'+glyph[board[r][c]]+'</span>':'')+(vizCoords&&c===files[0]?'<small class="viz-rank">'+(8-r)+'</small>':'')+(vizCoords&&r===ranks[7]?'<small class="viz-file">'+'abcdefgh'[c]+'</small>':'')+'</div>').join('')).join(''):'<p>Invalid FEN</p>')+'</div><div class="viz-sidebar"><h2>Position practice</h2><p>1. Memorize the locations of the pieces.</p><p>2. Hide the pieces and describe their squares aloud.</p><p>3. Reveal the board to check your reconstruction.</p><label for="vizFen">FEN position</label><textarea id="vizFen" spellcheck="false" rows="3">'+esc(fen)+'</textarea><div class="tools"><button id="vizLoad">Load FEN</button><button id="vizReset">Reset position</button></div><p id="vizError" class="muted" role="status"></p></div></div></div>';
+ el.querySelector('#vizDownloadPDF').onclick=downloadVisualizationPDF;
  el.querySelector('#vizPreset').onchange=e=>{vizIndex=+e.target.value;vizCustom='';vizHidden=false;render()};
  el.querySelector('#vizHide').onclick=()=>{vizHidden=!vizHidden;render()};
  el.querySelector('#vizFlip').onclick=()=>{vizOrientation=vizOrientation==='white'?'black':'white';render()};
