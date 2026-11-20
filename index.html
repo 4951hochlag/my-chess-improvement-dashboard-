@@ -151,7 +151,10 @@ function downloadVisualizationPDF(){
  'Do not reveal the mating move until I explicitly request the answer.',
  'If I make a mistake, give a small hint rather than the solution.',
  'Do not tell me the colours of squares; I practise those independently.',
- 'After my answer, verify the move and explain the mating net concisely.',
+ 'After I give my mating move, ask ME to explain the mating net, including',
+ 'which escape squares are covered and why the king cannot escape.',
+ 'Let me finish my explanation before offering corrections or hints.',
+ 'Only explain the mating net yourself if I explicitly ask you to.',
  'Proceed to the next position only when I say I am ready.'
  ];
  const lines=['MY CHESS IMPROVEMENT DASHBOARD','Visualization - Mate in One FEN Library','Generated from the current website position list.','',...prompt,'','POSITIONS',...vizPositions.flatMap((p,i)=>[(i+1)+'. '+p.name,p.fen,''])];
