@@ -1,0 +1,23 @@
+{
+  "name": "My Chess Improvement Dashboard",
+  "short_name": "My Chess",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#080d13",
+  "theme_color": "#080d13",
+  "icons": [
+    {
+      "src": "./assets/based-pawn-hero",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./cool-pawn-favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon",
+      "purpose": "any"
+    }
+  ]
+}
