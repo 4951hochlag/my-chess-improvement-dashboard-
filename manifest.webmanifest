@@ -8,14 +8,8 @@
   "theme_color": "#080d13",
   "icons": [
     {
-      "src": "./assets/based-pawn-hero",
-      "sizes": "any",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "./cool-pawn-favicon.ico",
-      "sizes": "any",
+      "src": "./cool-pawn-favicon.ico?v=3",
+      "sizes": "16x16 32x32 48x48 64x64",
       "type": "image/x-icon",
       "purpose": "any"
     }
