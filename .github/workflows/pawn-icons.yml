@@ -21,8 +21,7 @@ jobs:
           python - <<'PY'
           from PIL import Image
           im = Image.open('cool-pawn-favicon.ico')
-          im.size = (64, 64)
-          im = im.convert('RGBA')
+          im = im.ico.getimage((64, 64)).convert('RGBA')
           for size in (192, 512):
               im.resize((size, size), Image.Resampling.LANCZOS).save(f'cool-pawn-{size}.png')
           PY
