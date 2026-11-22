@@ -1,0 +1,37 @@
+name: Generate cool pawn Android icons
+on:
+  push:
+    paths:
+      - 'manifest.webmanifest'
+      - '.github/workflows/pawn-icons.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install Pillow
+      - name: Create PNG icons from existing cool pawn favicon
+        run: |
+          python - <<'PY'
+          from PIL import Image
+          im = Image.open('cool-pawn-favicon.ico')
+          im.size = (64, 64)
+          im = im.convert('RGBA')
+          for size in (192, 512):
+              im.resize((size, size), Image.Resampling.LANCZOS).save(f'cool-pawn-{size}.png')
+          PY
+      - name: Commit generated icons
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add cool-pawn-192.png cool-pawn-512.png
+          if ! git diff --cached --quiet; then
+            git commit -m "Generate Android home-screen cool pawn icons"
+            git push
+          fi
